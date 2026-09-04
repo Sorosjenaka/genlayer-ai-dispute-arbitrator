@@ -2,6 +2,12 @@
 
 Decentralized escrow and dispute resolution smart contract built for GenLayer.
 
+🔗 **Repository:** https://github.com/Sorosjenaka/genlayer-ai-dispute-arbitrator
+
+📄 **Contract Source:** https://github.com/Sorosjenaka/genlayer-ai-dispute-arbitrator/blob/main/contract.py
+
+⚡ **Raw Contract:** https://raw.githubusercontent.com/Sorosjenaka/genlayer-ai-dispute-arbitrator/main/contract.py
+
 ## Overview
 
 This project implements an AI-powered dispute resolution system for escrow contracts on GenLayer. It leverages GenLayer's Intelligent Contracts with AI consensus to adjudicate disputes between buyers and sellers without requiring centralized intermediaries.
