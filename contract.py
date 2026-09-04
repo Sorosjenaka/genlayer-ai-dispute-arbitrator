@@ -1,15 +1,12 @@
 # v0.2.16
 # {"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5g93hwfp7jqmwsfhh8jpz09h6"}
 
-from genlayer import *
 import json
+import genlayer as gl
 
 
 class DisputeEscrowContract(gl.Contract):
-    """
-    AI-Powered Dispute Resolution Escrow Contract for GenLayer.
-    """
-
+    # Persistent storage
     buyer: str
     seller: str
     terms: str
@@ -20,9 +17,6 @@ class DisputeEscrowContract(gl.Contract):
     arbiter_ruling: str
     arbitration_reasoning: str
     balance: int
-    created_at: int
-    disputed_at: int
-    resolved_at: int
     buyer_evidence_count: int
     seller_evidence_count: int
 
@@ -37,9 +31,6 @@ class DisputeEscrowContract(gl.Contract):
         self.evidence_seller = ""
         self.arbiter_ruling = ""
         self.arbitration_reasoning = ""
-        self.created_at = 0
-        self.disputed_at = 0
-        self.resolved_at = 0
         self.buyer_evidence_count = 0
         self.seller_evidence_count = 0
 
@@ -52,7 +43,7 @@ class DisputeEscrowContract(gl.Contract):
     @gl.public.write
     def submit_evidence(self, party: str, text_evidence: str) -> str:
         if self.status not in ["LOCKED", "DISPUTED"]:
-            return f"Error: Cannot submit evidence. Contract is finalized with status: {self.status}"
+            return f"Error: Cannot submit evidence. Status: {self.status}"
 
         party_lower = party.lower()
         if party_lower not in ["buyer", "seller"]:
@@ -77,22 +68,19 @@ class DisputeEscrowContract(gl.Contract):
             self.seller_evidence_count = self.seller_evidence_count + 1
             count = self.seller_evidence_count
 
-        return f"Evidence submitted for {party_lower}. Total evidence count: {count}"
+        return f"Evidence submitted for {party_lower}. Total: {count}"
 
     @gl.public.write
     def raise_dispute(self) -> str:
         if self.status != "LOCKED":
-            return f"Error: Dispute can only be raised from LOCKED state. Current status: {self.status}"
+            return f"Error: Dispute can only be raised from LOCKED. Current: {self.status}"
         self.status = "DISPUTED"
-        self.disputed_at = 1
         return "Dispute raised. Ready for GenLayer AI Arbitrator Consensus."
-
-
 
     @gl.public.write
     def execute_ai_arbitration(self) -> str:
         if self.status != "DISPUTED":
-            return f"Error: Contract is not under dispute. Current status: {self.status}"
+            return f"Error: Contract is not under dispute. Current: {self.status}"
 
         buyer_evidence = self.evidence_buyer
         if buyer_evidence == "":
@@ -130,23 +118,21 @@ class DisputeEscrowContract(gl.Contract):
                 ruling = "SPLIT"
         except Exception:
             ruling = "SPLIT"
-            reasoning = "Error parsing AI response. Defaulting to SPLIT ruling."
+            reasoning = "Error parsing AI response. Defaulting to SPLIT."
 
         self.arbitration_reasoning = str(reasoning)
         self.arbiter_ruling = ruling
         self.status = "RESOLVED_" + ruling
-        self.resolved_at = 1
         return f"Ruling: {ruling}. Reason: {reasoning}"
 
     @gl.public.write
     def release_funds(self) -> str:
         if self.status == "LOCKED":
             self.status = "RESOLVED_SELLER"
-            self.resolved_at = 1
             return f"Funds released to Seller. Total: {self.amount_usdc} USDC"
 
         if self.status == "DISPUTED":
-            return "Error: Cannot release funds while in DISPUTED state. Execute AI arbitration first."
+            return "Error: Cannot release while DISPUTED. Execute AI arbitration first."
 
         if self.status == "RESOLVED_BUYER":
             return f"Funds released to Buyer. Total: {self.amount_usdc} USDC"
@@ -197,3 +183,5 @@ class DisputeEscrowContract(gl.Contract):
     @gl.public.view
     def get_terms(self) -> str:
         return self.terms
+
+
