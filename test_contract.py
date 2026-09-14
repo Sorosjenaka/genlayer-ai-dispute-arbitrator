@@ -1,132 +1,246 @@
+"""Offline unit tests for contract.py with a mocked `genlayer` module.
+
+The real GenLayer SDK only exists inside GenVM/Studio, so we inject a minimal
+mock into sys.modules before importing the contract. Mocks cover storage
+types, message sender, nondet web/LLM, and consensus runners.
+"""
+import sys
+import types
+import json
 import unittest
-from contract import DisputeEscrowContract
-from genlayer import MockGenLayerEnvironment
+from dataclasses import dataclass
 
 
-class TestDisputeEscrowContract(unittest.TestCase):
-    
-    def setUp(self):
-        self.env = MockGenLayerEnvironment()
-        self.contract = DisputeEscrowContract(
-            buyer="0xBuyer",
-            seller="0xSeller",
-            terms="Deliver code by Friday.",
-            amount_usdc=1000
-        )
-    
-    def test_initial_state(self):
-        self.assertEqual(self.contract.status, "LOCKED")
-        self.assertEqual(self.contract.buyer, "0xBuyer")
-        self.assertEqual(self.contract.amount_usdc, 1000)
-        self.assertEqual(self.contract.evidence, {"buyer": [], "seller": []})
-        self.assertIsNone(self.contract.arbiter_ruling)
-    
-    def test_deposit_funds_in_locked_state(self):
-        result = self.contract.deposit_funds()
-        self.assertIn("Escrow active", result)
-        self.assertIn("1000 USDC", result)
-    
-    def test_deposit_funds_fails_in_disputed_state(self):
-        self.contract.status = "DISPUTED"
-        result = self.contract.deposit_funds()
-        self.assertIn("Error", result)
-    
-    def test_submit_evidence_buyer(self):
-        result = self.contract.submit_evidence("buyer", "Payment was made but no delivery.")
-        self.assertIn("Evidence submitted", result)
-        self.assertEqual(len(self.contract.evidence["buyer"]), 1)
-    
-    def test_submit_evidence_seller(self):
-        result = self.contract.submit_evidence("seller", "Code was delivered on time.")
-        self.assertIn("Evidence submitted", result)
-        self.assertEqual(len(self.contract.evidence["seller"]), 1)
-    
-    def test_submit_evidence_invalid_party(self):
-        result = self.contract.submit_evidence("invalid", "Evidence")
-        self.assertIn("Error", result)
-    
-    def test_submit_evidence_empty_text(self):
-        result = self.contract.submit_evidence("buyer", "")
-        self.assertIn("Error", result)
-    
-    def test_submit_evidence_fails_after_resolution(self):
-        self.contract.status = "RESOLVED_BUYER"
-        result = self.contract.submit_evidence("buyer", "Late evidence")
-        self.assertIn("Error", result)
-    
-    def test_raise_dispute_from_locked(self):
-        result = self.contract.raise_dispute()
-        self.assertIn("Dispute raised", result)
-        self.assertEqual(self.contract.status, "DISPUTED")
-    
-    def test_raise_dispute_fails_from_disputed(self):
-        self.contract.status = "DISPUTED"
-        result = self.contract.raise_dispute()
-        self.assertIn("Error", result)
-    
-    def test_release_funds_from_locked(self):
-        result = self.contract.release_funds()
-        self.assertIn("Seller", result)
-        self.assertEqual(self.contract.status, "RESOLVED_SELLER")
-    
-    def test_release_funds_fails_from_disputed(self):
-        self.contract.status = "DISPUTED"
-        result = self.contract.release_funds()
-        self.assertIn("Error", result)
-    
-    def test_release_funds_split_ruling(self):
-        self.contract.status = "RESOLVED_SPLIT"
-        result = self.contract.release_funds()
-        self.assertIn("split", result.lower())
-        self.assertIn("Buyer=500", result)
-        self.assertIn("Seller=500", result)
-    
-    def test_release_funds_split_with_odd_amount(self):
-        self.contract.amount_usdc = 1001
-        self.contract.balance = 1001
-        self.contract.status = "RESOLVED_SPLIT"
-        result = self.contract.release_funds()
-        self.assertIn("Buyer=501", result)
-        self.assertIn("Seller=500", result)
-    
-    def test_get_status_initial(self):
-        status = self.contract.get_status()
-        self.assertEqual(status["status"], "LOCKED")
-        self.assertEqual(status["amount_usdc"], 1000)
-    
-    def test_get_status_with_evidence(self):
-        self.contract.submit_evidence("buyer", "Evidence 1")
-        status = self.contract.get_status()
-        self.assertEqual(status["buyer_evidence_count"], 1)
-    
-    def test_get_evidence_no_filter(self):
-        self.contract.submit_evidence("buyer", "Buyer evidence")
-        self.contract.submit_evidence("seller", "Seller evidence")
-        evidence = self.contract.get_evidence()
-        self.assertEqual(len(evidence["buyer"]), 1)
-        self.assertEqual(len(evidence["seller"]), 1)
-    
-    def test_get_evidence_invalid_party(self):
-        result = self.contract.get_evidence("invalid")
-        self.assertIn("error", result.lower())
-    
-    def test_full_happy_path(self):
-        self.contract.deposit_funds()
-        dispute_result = self.contract.raise_dispute()
-        self.assertIn("Dispute raised", dispute_result)
-        self.contract.evidence["buyer"].append("Paid but no delivery")
-        self.contract.status = "RESOLVED_BUYER"
-        release_result = self.contract.release_funds()
-        self.assertIn("Buyer", release_result)
-    
-    def test_full_escrow_to_seller(self):
-        self.contract.deposit_funds()
-        release_result = self.contract.release_funds()
-        self.assertIn("Seller", release_result)
-    
-    def test_get_terms(self):
-        terms = self.contract.get_terms()
-        self.assertEqual(terms, "Deliver code by Friday.")
+def _install_genlayer_mock(llm_responses=None, web_body=b"<html>deliverable</html>", web_status=200):
+    llm_responses = llm_responses or {}
+    mock = types.ModuleType("genlayer")
+
+    class DynArray(list):
+        pass
+
+    class TreeMap(dict):
+        def get_or_insert_default(self, key):
+            if key not in self:
+                self[key] = {}
+            return self[key]
+
+    mock.DynArray = DynArray
+    mock.TreeMap = TreeMap
+    mock.u256 = int
+    mock.Address = str
+
+    def allow_storage(cls):
+        return cls
+
+    mock.allow_storage = allow_storage
+
+    class _Addr:
+        def __init__(self, hx):
+            self._hx = hx
+
+        @property
+        def as_hex(self):
+            return self._hx
+
+        def __str__(self):
+            return self._hx
+
+    class _Msg:
+        sender_address = _Addr("0xBuyer")
+
+    class _Gl:
+        message = _Msg()
+
+        class Contract:
+            pass
+
+    mock.gl = _Gl()
+    mock.message = _Msg()
+
+    class _Public:
+        @staticmethod
+        def view(fn):
+            fn._gl_public = "view"
+            return fn
+
+        @staticmethod
+        def write(fn):
+            fn._gl_public = "write"
+            return fn
+
+    mock.public = _Public
+
+    class UserError(Exception):
+        def __init__(self, message=""):
+            super().__init__(message)
+            self.message = message
+
+    class VMError(Exception):
+        pass
+
+    class Return:
+        def __init__(self, calldata):
+            self.calldata = calldata
+
+    def run_nondet_unsafe(leader_fn, validator_fn):
+        try:
+            result = leader_fn()
+        except (UserError, VMError) as e:
+            # leader errored: validator decides; our mock validator returns False -> propagate
+            ok = validator_fn(e)
+            if not ok:
+                raise
+            raise
+        ok = validator_fn(Return(result))
+        if not ok:
+            raise UserError("consensus rejected")
+        return result
+
+    def strict_eq(fn):
+        return fn()
+
+    mock.vm = types.SimpleNamespace(UserError=UserError, VMError=VMError, Return=Return,
+                                    run_nondet_unsafe=run_nondet_unsafe, run_nondet=run_nondet_unsafe)
+    mock.eq_principle = types.SimpleNamespace(strict_eq=strict_eq)
+
+    class _Resp:
+        def __init__(self, body, status):
+            self.body = body
+            self.status = status
+
+    def _web_get(url):
+        return _Resp(web_body, web_status)
+
+    state = {"calls": []}
+
+    def _exec_prompt(prompt):
+        state["calls"].append(prompt)
+        if "neutral on-chain arbitrator" in prompt:
+            return llm_responses.get("arbitrate", json.dumps({
+                "ruling": "RELEASE_SELLER", "confidence": 85,
+                "reasoning": "Work matches terms."}))
+        return llm_responses.get("verify", json.dumps({
+            "verdict": "APPROVED", "score": 90,
+            "reasoning": "Deliverable satisfies terms."}))
+
+    mock.nondet = types.SimpleNamespace(
+        web=types.SimpleNamespace(get=_web_get),
+        exec_prompt=_exec_prompt,
+    )
+    # also expose under gl namespace like real SDK (gl.nondet / gl.vm / gl.eq_principle)
+    mock.gl.nondet = mock.nondet
+    mock.gl.vm = mock.vm
+    mock.gl.eq_principle = mock.eq_principle
+    mock.gl.public = mock.public
+    mock.gl.storage = types.SimpleNamespace(copy_to_memory=lambda x: x)
+    mock.storage = mock.gl.storage
+
+    sys.modules["genlayer"] = mock
+    return mock, state
+
+
+MOCK, MOCK_STATE = _install_genlayer_mock()
+
+from contract import MilestoneEscrowArbiter  # noqa: E402
+
+
+def _new_contract(buyer="0xBuyer"):
+    MOCK.gl.message.sender_address = type("A", (), {"as_hex": buyer})()
+    MOCK.message.sender_address = MOCK.gl.message.sender_address
+    c = MilestoneEscrowArbiter()
+    # emulate GenVM zero-init for storage maps
+    from genlayer import TreeMap, DynArray
+    c.escrows = TreeMap()
+    c.escrow_ids = DynArray()
+    c.next_id = 0
+    c.owner = buyer
+    return c
+
+
+def _as(sender, fn, *args, **kwargs):
+    MOCK.gl.message.sender_address = type("A", (), {"as_hex": sender})()
+    MOCK.message.sender_address = MOCK.gl.message.sender_address
+    return fn(*args, **kwargs)
+
+
+class TestLifecycle(unittest.TestCase):
+    def test_create_fund_submit_release_happy_path(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 1000)
+        self.assertEqual(eid, "0")
+        self.assertEqual(_as("0xBuyer", c.fund_escrow, eid), "FUNDED")
+        self.assertEqual(_as("0xSeller", c.submit_deliverable, eid, "https://example.com/work", "done"), "SUBMITTED")
+        status = _as("0xAnyone", c.verify_deliverable, eid)
+        self.assertEqual(status, "VERIFIED_APPROVED")
+        esc = _as("0xAnyone", c.get_escrow, eid)
+        self.assertEqual(esc["verdict"], "APPROVED")
+        self.assertGreaterEqual(esc["score"], 70)
+        self.assertEqual(_as("0xBuyer", c.release, eid), "RESOLVED_SELLER")
+
+    def test_create_validation(self):
+        c = _new_contract()
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.create_escrow, "", "Valid terms here xx", 10)
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.create_escrow, "0xSeller", "short", 10)
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.create_escrow, "0xSeller", "Valid terms here xx", 0)
+
+    def test_only_buyer_can_fund(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+        with self.assertRaises(Exception):
+            _as("0xEve", c.fund_escrow, eid)
+
+    def test_only_seller_can_submit(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+        _as("0xBuyer", c.fund_escrow, eid)
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.submit_deliverable, eid, "https://example.com/x", "hi")
+
+    def test_rejected_path_refund(self):
+        import genlayer as gl_live
+        orig_prompt = gl_live.nondet.exec_prompt
+
+        def rejected_prompt(prompt):
+            if "neutral on-chain arbitrator" in prompt:
+                return orig_prompt(prompt)
+            return json.dumps({"verdict": "REJECTED", "score": 10,
+                               "reasoning": "Empty page, nothing delivered."})
+
+        gl_live.nondet.exec_prompt = rejected_prompt
+        try:
+            c = _new_contract("0xBuyer")
+            eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+            _as("0xBuyer", c.fund_escrow, eid)
+            _as("0xSeller", c.submit_deliverable, eid, "https://example.com/empty", "done")
+            status = _as("0xAnyone", c.verify_deliverable, eid)
+            self.assertEqual(status, "VERIFIED_REJECTED")
+            self.assertEqual(_as("0xBuyer", c.refund, eid), "RESOLVED_BUYER")
+        finally:
+            gl_live.nondet.exec_prompt = orig_prompt
+
+    def test_dispute_and_arbitrate(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 500)
+        _as("0xBuyer", c.fund_escrow, eid)
+        _as("0xSeller", c.submit_deliverable, eid, "https://example.com/work", "done")
+        _as("0xAnyone", c.verify_deliverable, eid)
+        self.assertEqual(_as("0xBuyer", c.raise_dispute, eid, "Missing contact form section", ""), "DISPUTED")
+        status = _as("0xAnyone", c.arbitrate_dispute, eid)
+        self.assertIn(status, ("RESOLVED_SELLER", "RESOLVED_BUYER", "RESOLVED_SPLIT"))
+        stats = _as("0xAnyone", c.get_stats)
+        self.assertEqual(stats["total"], 1)
+        self.assertEqual(stats["resolved"], 1)
+
+    def test_views(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 50)
+        lst = _as("0xAnyone", c.list_escrows)
+        self.assertIn(eid, lst)
+        stats = _as("0xAnyone", c.get_stats)
+        self.assertEqual(stats["total"], 1)
 
 
 if __name__ == "__main__":
