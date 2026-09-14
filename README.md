@@ -11,9 +11,21 @@ Live submission target: GenLayer Portal contribution type **52 — Intelligent C
 - Raw (for Studio import): `https://raw.githubusercontent.com/Sorosjenaka/genlayer-ai-dispute-arbitrator/main/contract.py`
 - Tests: [`test_contract.py`](./test_contract.py) — `python -m pytest test_contract.py -v`
 
-> After you deploy, fill these in and use them as portal evidence:
-> - Explorer: `https://explorer-bradbury.genlayer.com/address/0xYOUR_CONTRACT`
-> - Studio: `https://studio.genlayer.com/?import-contract=0xYOUR_CONTRACT`
+> Deployed (Studionet, demo — no faucet needed):
+> - Contract: `0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81`
+> - Explorer: `https://explorer-studio.genlayer.com/address/0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81`
+> - Studio: `https://studio.genlayer.com/?import-contract=0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81`
+> - Deploy tx: `0xb532d83ca3d1ab25aa2c9453db66688b1b5b4a7a818f4cb4f48577498974409f`
+>   (status ACCEPTED, consensus MAJORITY_AGREE)
+> - Demo escrow #0 on this contract: create `0xf408a850f02e32d7b0754f96b176fc1f35661b6fcd506b35d025957cd94322d7`
+>   → fund `0xda300b7959d0232e0221364cab3613d23593eda9b1c30d550ed272d25f3d0a12`
+>   → submit `0x32235f99022c9080406181afbfcb31220fade4b55c8165a8356bc5cd2cff4675`
+>   → reachable-check `0x73dd667142d2ae4200d077dc7ac537814af4ab8f9ab9badf29d2ff5b15a0824a`
+>   → AI verify `0xe8f1a61cefa7fa25f2773306b28277a4f1086f948d37e3d1bfe023cf866a3d30`
+>   ⇒ `VERIFIED_APPROVED`, verdict APPROVED, score 96.
+>
+> For a stronger (testnet) submission, redeploy the same file to Bradbury after
+> funding an account via the faucet, then replace the links above.
 
 ## Why this is a reusable primitive (not a demo)
 

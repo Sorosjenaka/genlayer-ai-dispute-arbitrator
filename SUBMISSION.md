@@ -37,9 +37,11 @@ Studio (see tx/contract links in evidence).
 
 ## Evidence URLs (attach all three)
 1. GitHub repo: https://github.com/Sorosjenaka/genlayer-ai-dispute-arbitrator
-2. Explorer contract: https://explorer-bradbury.genlayer.com/address/0xYOUR_CONTRACT
-   (replace after deploy; include one verify_deliverable tx hash in notes)
-3. Studio contract: https://studio.genlayer.com/?import-contract=0xYOUR_CONTRACT
+2. Explorer contract: https://explorer-studio.genlayer.com/address/0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81
+   (Studionet demo deployment, tx 0xb532d83ca3d1ab25aa2c9453db66688b1b5b4a7a818f4cb4f48577498974409f —
+   ACCEPTED / MAJORITY_AGREE. Demo escrow #0 verified APPROVED score 96,
+   AI tx 0xe8f1a61cefa7fa25f2773306b28277a4f1086f948d37e3d1bfe023cf866a3d30)
+3. Studio contract: https://studio.genlayer.com/?import-contract=0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81
 
 ## Pre-submit checklist
 - [ ] Deployed to Bradbury (genlayer deploy --contract ./contract.py), address noted

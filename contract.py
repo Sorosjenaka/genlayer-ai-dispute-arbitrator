@@ -42,14 +42,24 @@ from dataclasses import dataclass
 import json
 
 
+def _addr_to_str(value) -> str:
+    """CLI/Studio may pass addresses as Address objects; storage uses hex str."""
+    try:
+        as_hex = getattr(value, "as_hex", None)
+        if callable(as_hex):
+            return as_hex()
+        if isinstance(as_hex, str):
+            return as_hex
+    except Exception:
+        pass
+    return str(value)
+
+
 def _sender_hex() -> str:
     try:
-        return gl.message.sender_address.as_hex
+        return _addr_to_str(gl.message.sender_address)
     except Exception:
-        try:
-            return str(gl.message.sender_address)
-        except Exception:
-            return "0x0"
+        return "0x0"
 
 
 def _parse_llm_json(raw: str) -> dict:
@@ -96,6 +106,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def create_escrow(self, seller: str, terms: str, amount: u256) -> str:
+        seller = _addr_to_str(seller)
         if len(seller.strip()) == 0:
             raise gl.vm.UserError("seller address required")
         if len(terms.strip()) < 10:
@@ -130,6 +141,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def fund_escrow(self, escrow_id: str) -> str:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
@@ -144,6 +156,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def submit_deliverable(self, escrow_id: str, deliverable_url: str, note: str) -> str:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
@@ -167,6 +180,7 @@ class MilestoneEscrowArbiter(gl.Contract):
     @gl.public.write
     def check_deliverable_reachable(self, escrow_id: str) -> str:
         """Deterministic pre-check (strict_eq): is the deliverable URL fetchable?"""
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = gl.storage.copy_to_memory(self.escrows[escrow_id])
@@ -192,6 +206,7 @@ class MilestoneEscrowArbiter(gl.Contract):
         Core AI consensus: does the deliverable satisfy the terms?
         Anyone may call; validators independently re-fetch + re-judge.
         """
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow_mem = gl.storage.copy_to_memory(self.escrows[escrow_id])
@@ -267,6 +282,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def raise_dispute(self, escrow_id: str, reason: str, evidence_url: str) -> str:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
@@ -289,6 +305,7 @@ class MilestoneEscrowArbiter(gl.Contract):
         Second AI consensus: final ruling on a dispute.
         Considers terms + deliverable + dispute reason + prior verification.
         """
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow_mem = gl.storage.copy_to_memory(self.escrows[escrow_id])
@@ -385,6 +402,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def release(self, escrow_id: str) -> str:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
@@ -399,6 +417,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.write
     def refund(self, escrow_id: str) -> str:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
@@ -415,6 +434,7 @@ class MilestoneEscrowArbiter(gl.Contract):
 
     @gl.public.view
     def get_escrow(self, escrow_id: str) -> dict:
+        escrow_id = str(escrow_id)
         if escrow_id not in self.escrows:
             raise gl.vm.UserError("escrow not found")
         escrow = self.escrows[escrow_id]
