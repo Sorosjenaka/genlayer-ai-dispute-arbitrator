@@ -430,6 +430,30 @@ class MilestoneEscrowArbiter(gl.Contract):
         self.escrows[escrow_id] = escrow
         return "RESOLVED_BUYER"
 
+    @gl.public.write
+    def split(self, escrow_id: str) -> str:
+        """
+        Milestone feature: deterministic settlement for SPLIT rulings.
+        Without this, escrows ruled SPLIT had no on-chain way to settle.
+        Buyer (odd remainder goes to buyer) and seller shares are derived
+        from the escrowed amount; callable once by either party.
+        """
+        escrow_id = str(escrow_id)
+        if escrow_id not in self.escrows:
+            raise gl.vm.UserError("escrow not found")
+        escrow = self.escrows[escrow_id]
+        if escrow.status != "RESOLVED_SPLIT":
+            raise gl.vm.UserError("split allowed only after SPLIT ruling")
+        caller = _sender_hex()
+        if caller.lower() not in (escrow.buyer.lower(), escrow.seller.lower()):
+            raise gl.vm.UserError("only parties can settle")
+        total = int(escrow.amount)
+        buyer_share = total // 2 + total % 2
+        seller_share = total - buyer_share
+        escrow.status = "RESOLVED_SPLIT_EXECUTED"
+        self.escrows[escrow_id] = escrow
+        return f"SPLIT buyer={buyer_share} seller={seller_share}"
+
     # ---------- views ----------
 
     @gl.public.view

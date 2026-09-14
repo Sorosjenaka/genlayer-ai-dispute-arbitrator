@@ -49,3 +49,18 @@ Studio (see tx/contract links in evidence).
 - [ ] Explorer link opens the contract; Studio import link works
 - [ ] README raw link works; tests pass (python -m pytest test_contract.py -v)
 - [ ] Max 2 submissions/week for type 52 — make this one count
+
+---
+
+# Milestone submission (type 47) — copy/paste
+
+## Title
+Milestone: SPLIT settlement for MilestoneEscrowArbiter (v2 deployment)
+
+## Description / Notes (994 chars, fits 1000 limit)
+See checked-in text: description below READY TO PASTE.
+
+## Evidence URLs
+1. https://github.com/Sorosjenaka/genlayer-ai-dispute-arbitrator
+2. https://explorer-studio.genlayer.com/address/0x183E6251FA892Cdb04D3fb7Ed20D5500520DC487
+3. https://studio.genlayer.com/?import-contract=0x183E6251FA892Cdb04D3fb7Ed20D5500520DC487

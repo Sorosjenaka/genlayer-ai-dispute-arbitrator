@@ -234,6 +234,44 @@ class TestLifecycle(unittest.TestCase):
         self.assertEqual(stats["total"], 1)
         self.assertEqual(stats["resolved"], 1)
 
+    def test_split_even_amount(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 1000)
+        c.escrows[eid].status = "RESOLVED_SPLIT"
+        result = _as("0xSeller", c.split, eid)
+        self.assertIn("buyer=500", result.lower())
+        self.assertIn("seller=500", result.lower())
+        self.assertEqual(c.escrows[eid].status, "RESOLVED_SPLIT_EXECUTED")
+
+    def test_split_odd_amount_buyer_gets_remainder(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 1001)
+        c.escrows[eid].status = "RESOLVED_SPLIT"
+        result = _as("0xBuyer", c.split, eid)
+        self.assertIn("buyer=501", result.lower())
+        self.assertIn("seller=500", result.lower())
+
+    def test_split_rejected_without_split_ruling(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.split, eid)
+
+    def test_split_rejected_for_outsider(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+        c.escrows[eid].status = "RESOLVED_SPLIT"
+        with self.assertRaises(Exception):
+            _as("0xEve", c.split, eid)
+
+    def test_split_single_use(self):
+        c = _new_contract("0xBuyer")
+        eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 100)
+        c.escrows[eid].status = "RESOLVED_SPLIT"
+        _as("0xBuyer", c.split, eid)
+        with self.assertRaises(Exception):
+            _as("0xBuyer", c.split, eid)
+
     def test_views(self):
         c = _new_contract("0xBuyer")
         eid = _as("0xBuyer", c.create_escrow, "0xSeller", "Build landing page with contact form", 50)

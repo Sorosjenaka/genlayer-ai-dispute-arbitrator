@@ -74,6 +74,27 @@ verify_deliverable | raise_dispute | arbitrate_dispute | release | refund`
 
 View: `get_escrow | list_escrows | get_stats`
 
+## Milestone: SPLIT settlement (v2 deployment)
+
+Base contract (v1, type-52 submission): `0x49a12ACB1601D969B4671BBFccC4c97D8E0D1C81`
+Milestone contract (v2, this deployment): `0x183E6251FA892Cdb04D3fb7Ed20D5500520DC487`
+
+What changed: new `split()` write method — deterministic settlement for SPLIT
+arbitration rulings (buyer gets `amount//2 + amount%2`, seller the rest, one-shot,
+parties only, new terminal status `RESOLVED_SPLIT_EXECUTED`). Without it, SPLIT-ruled
+escrows had no on-chain settlement path while RELEASE/REFUND rulings did.
+
+- Explorer: `https://explorer-studio.genlayer.com/address/0x183E6251FA892Cdb04D3fb7Ed20D5500520DC487`
+- Studio: `https://studio.genlayer.com/?import-contract=0x183E6251FA892Cdb04D3fb7Ed20D5500520DC487`
+- Deploy tx: `0xae27c6d83d2323705deb745b98d8293b7701e0931a636514badd7e2e9f33d45f`
+- Full dispute lifecycle on v2 escrow #0, all SUCCESS: create `0x658405f1...39cf2`
+  → fund `0x7a717c28...a8d17` → submit `0xb5ecfe29...f8838` → AI verify
+  `0xa08985a2...d437` (REJECTED, score 10) → dispute `0xb9f1e622...29c915`
+  → AI arbitrate `0x09e6549a...e7c4dd` (REFUND_BUYER, confidence 97, MAJORITY_AGREE)
+  → refund `0xbb14d319...85030f` ⇒ RESOLVED_BUYER.
+- Tests: 12 pass (`python -m pytest test_contract.py -v`), incl. 5 new split tests
+  (even/odd shares, auth guard, single-use, wrong-status guard).
+
 ## Deploy (Bradbury testnet)
 
 Network: `testnet-bradbury` — chain `4221`, RPC `https://rpc-bradbury.genlayer.com`,
